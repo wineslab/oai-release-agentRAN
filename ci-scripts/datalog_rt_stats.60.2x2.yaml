@@ -1,0 +1,38 @@
+#this is a configuration file
+#used to build real time processing statistics 
+#for 5G NR phy test (gNB terminate)
+Title : Processing Time (us) from datalog_rt_stats.60.2x2.yaml
+ColNames :
+  - Metric
+  - Average; Max; Count
+  - Average vs Reference Deviation (Reference Value; Acceptability Deviation Threshold)
+Ref : 
+  feprx : 75.0
+  feptx_prec : 14.0
+  feptx_ofdm : 30.0
+  feptx_total : 80.0
+  L1 Tx processing : 280.0
+  DLSCH encoding : 140.0
+  L1 Rx processing : 345.0
+  PUSCH inner-receiver : 155.0
+  DL & UL scheduling timing : 8.0
+  UL Indication : 3.0
+  Slot Indication : 9.0
+  feprx : 85.0
+  feptx_ofdm (per port, half_slot) : 31
+  feptx_total : 92
+DeviationThreshold :
+  feprx : 0.25
+  feptx_prec : 0.25
+  feptx_ofdm : 0.25
+  feptx_total : 0.25
+  L1 Tx processing : 0.25
+  DLSCH encoding : 0.25
+  L1 Rx processing : 0.25
+  PUSCH inner-receiver : 0.25
+  DL & UL scheduling timing : 0.35
+  UL Indication : 1.00
+  Slot Indication : 0.35
+  feprx : 0.25
+  feptx_ofdm (per port, half_slot) : 0.25
+  feptx_total : 0.25

@@ -1,0 +1,233 @@
+#!/bin/groovy
+/*
+ * Licensed to the OpenAirInterface (OAI) Software Alliance under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The OpenAirInterface Software Alliance licenses this file to You under
+ * the OAI Public License, Version 1.1  (the "License"); you may not use this file
+ * except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *      http://www.openairinterface.org/?page_id=698
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *-------------------------------------------------------------------------------
+ * For more information about the OpenAirInterface (OAI) Software Alliance:
+ *      contact@openairinterface.org
+ */
+
+def pythonExecutor = params.pythonExecutor
+def testXMLFile = params.pythonTestXmlFile
+def mainPythonAllXmlFiles = ""
+def buildStageStatus = true
+def JOB_TIMESTAMP
+
+// Choose test stage name or fallback default
+def testStageName = params.pipelineTestStageName != null ? params.pipelineTestStageName : 'Template Test Stage'
+
+// Name of the resource
+def lockResources = []
+if (params.LockResources != null && params.LockResources.trim().length() > 0)
+  params.LockResources.trim().split(",").each{lockResources += [resource: it.trim()]}
+
+// Global Parameters. Normally they should be populated when the master job
+// triggers the slave job with parameters
+
+def sourceRepository = params.eNB_Repository ?: env.GIT_URL
+def sourceBranch = params.eNB_Branch ?: env.GIT_BRANCH
+def targetRepository = params.Target_Repository ?: sourceRepository
+def targetBranch = params.eNB_TargetBranch ?: 'develop'
+def commitID = params.eNB_CommitID ?: env.GIT_COMMIT
+def is_MR = params.eNB_mergeRequest ?: false
+
+def flexricOption = ""
+def runWithOC = false
+
+//-------------------------------------------------------------------------------
+// Pipeline start
+pipeline {
+  agent {
+    label pythonExecutor
+  }
+  options {
+    timestamps()
+    ansiColor('xterm')
+    lock(extra: lockResources)
+  }
+
+  stages {
+    stage("Build Init") {
+      steps {
+        script {
+          echo '\u2705 \u001B[94mBuild Init\u001B[0m'
+          JOB_TIMESTAMP = sh(returnStdout: true, script: 'date --utc --rfc-3339=seconds | sed -e "s#+00:00##"').trim()
+        }
+        // update the build name and description
+        buildName "${params.eNB_MR}"
+        buildDescription "Branch : ${sourceBranch}"
+      }
+    }
+    stage ('Verify Parameters') {
+      steps {
+        script {
+          echo '\u2705 \u001B[94mVerify Parameters\u001B[0m'
+          def allParametersPresent = true
+
+          if (params.LockResources == null) {
+            echo "no LockResources given"
+            allParametersPresent = false
+          }
+          if (params.eNB_SourceCodePath == null) {
+            echo "no eNB_SourceCodePath given"
+            allParametersPresent = false
+          }
+          if (params.OC_Credentials != null) {
+            echo "This pipeline is configured to run with Opensift Cluster."
+            runWithOC = true
+            if (params.OC_ProjectName == null) {
+              echo "no OC_ProjectName given"
+              allParametersPresent = false
+            }
+          }
+          if (params.Flexric_Tag != null) {
+            echo "This pipeline is configured to run with a FlexRIC deployment."
+            echo "Appending FlexRicTag option to the list of options"
+            flexricOption = "--FlexRicTag=${params.Flexric_Tag}"
+            echo "Using new Flexric option: ${flexricOption}"
+          }
+
+          echo "CI executor node    :   ${pythonExecutor}"
+          echo "Source Repository   :   ${sourceRepository}"
+          echo "Source Branch       :   ${sourceBranch}"
+          echo "Target Repository   :   ${targetRepository}"
+          echo "Target Branch       :   ${targetBranch}"
+          echo "Commit ID           :   ${commitID}"
+
+          if (allParametersPresent) {
+            echo '\u2705 \u001B[94m All parameters are present\u001B[0m'
+            if (is_MR) {
+              sh "git fetch"
+              sh "./ci-scripts/doGitLabMerge.sh --src-branch ${sourceBranch} --src-commit ${commitID} --target-branch ${targetBranch} --target-commit latest"
+            } else {
+              sh "git fetch"
+              sh "git checkout -f ${commitID}"
+            }
+          } else {
+            echo "\u274C Some parameters are missing"
+            sh "./ci-scripts/fail.sh"
+          }
+        }
+      }
+    }
+    stage ("Deploy and Test") {
+      steps {
+        script {
+          dir ('ci-scripts') {
+            echo "\u2705 \u001B[94m Deploy and Test: ${testStageName}\u001B[0m"
+            String[] myXmlTestSuite = testXMLFile.split("\\r?\\n")
+            for (xmlFile in myXmlTestSuite) {
+              if (fileExists(xmlFile)) {
+                mainPythonAllXmlFiles += "--XMLTestFile=" + xmlFile + " "
+                echo "Test XML file         :   ${xmlFile}"
+              } else {
+                echo "Test XML file ${xmlFile}: no such file"
+              }
+            }
+            sh """
+              python3 main.py --mode=InitiateHtml --ranRepository=${targetRepository} \
+                              --ranBranch=${sourceBranch} --ranCommitID=${commitID} \
+                              --ranAllowMerge=${is_MR} --ranTargetBranch=${targetBranch} \
+                              ${flexricOption} ${mainPythonAllXmlFiles}
+            """
+            if (runWithOC) {
+              withCredentials([usernamePassword(credentialsId: "${params.OC_Credentials}", usernameVariable: 'OC_Username', passwordVariable: 'OC_Password')]) {
+                sh """
+                  python3 main.py --mode=InitiateHtml --ranRepository=${targetRepository} \
+                                  --ranBranch=${sourceBranch} --ranCommitID=${commitID} \
+                                  --ranAllowMerge=${is_MR} --ranTargetBranch=${targetBranch} \
+                                  ${flexricOption} ${mainPythonAllXmlFiles}
+                """
+                for (xmlFile in myXmlTestSuite) {
+                  if (fileExists(xmlFile)) {
+                    try {
+                      timeout (time: 60, unit: 'MINUTES') {
+                        sh """
+                          python3 main.py --mode=TesteNB --ranRepository=${targetRepository} \
+                                          --ranBranch=${sourceBranch} --ranCommitID=${commitID} \
+                                          --ranAllowMerge=${is_MR} --ranTargetBranch=${targetBranch} \
+                                          --eNBSourceCodePath=${params.eNB_SourceCodePath} --XMLTestFile=${xmlFile} \
+                                          --OCUserName=${OC_Username} --OCPassword=${OC_Password} --OCProjectName=${OC_ProjectName} \
+                                          ${flexricOption}
+                        """
+                      }
+                    } catch (Exception e) {
+                      currentBuild.result = 'FAILURE'
+                      buildStageStatus = false
+                    }
+                  }
+                }
+              }
+            } else {
+              for (xmlFile in myXmlTestSuite) {
+                if (fileExists(xmlFile)) {
+                  try {
+                    timeout (time: 60, unit: 'MINUTES') {
+                      sh """
+                        python3 main.py --mode=TesteNB --ranRepository=${targetRepository} \
+                                        --ranBranch=${sourceBranch} --ranCommitID=${commitID} \
+                                        --ranAllowMerge=${is_MR} --ranTargetBranch=${targetBranch} \
+                                        --eNBSourceCodePath=${params.eNB_SourceCodePath} --XMLTestFile=${xmlFile} \
+                                        ${flexricOption}
+                      """
+                    }
+                  } catch (Exception e) {
+                    currentBuild.result = 'FAILURE'
+                    buildStageStatus = false
+                  }
+                }
+              }
+            }
+          sh "python3 main.py --mode=FinalizeHtml --finalStatus=${buildStageStatus}"
+          }
+        }
+      }
+    }
+    stage ("Log Collection") {
+      steps {
+        script {
+	  echo '\u2705 \u001B[94mLog Collection\u001B[0m'
+          dir ('ci-scripts') {
+            // Zipping all archived log files
+              sh "mkdir test_logs"
+              sh "mv *.log* test_logs || true"
+              // Zip all log files matching cmake_targets/{*.log*,log/*} into test_logs_XXXX.zip
+              if (fileExists('../cmake_targets/log')) {
+                sh "mv ../cmake_targets/log/* test_logs || true"
+              }
+              sh "zip -r -qq test_logs_${env.BUILD_ID}.zip *test_log*/"
+              sh "rm -rf *test_log*/"
+              if (fileExists("test_logs_${env.BUILD_ID}.zip")) {
+                archiveArtifacts artifacts: "test_logs_${env.BUILD_ID}.zip"
+              }
+            if (fileExists("test_results.html")) {
+              def reportName = "test_results-${env.JOB_NAME}.html"
+              sh "mv test_results.html ${reportName}"
+              sh """
+                sed -i -e 's#TEMPLATE_BUILD_TIME#${JOB_TIMESTAMP}#' \
+                       -e 's#TEMPLATE_JOB_NAME#${JOB_NAME}#' \
+		       -e 's@build #TEMPLATE_BUILD_ID@build #${BUILD_ID}@' \
+                       -e 's#Build-ID: TEMPLATE_BUILD_ID#Build-ID: <a href=\"${BUILD_URL}\">${BUILD_ID}</a>#' \
+                       -e 's#TEMPLATE_STAGE_NAME#${testStageName}#' ${reportName}
+	      """
+              archiveArtifacts artifacts: "${reportName}"
+            }
+          }
+        }
+      }
+    }
+  }
+}

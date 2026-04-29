@@ -1,0 +1,4 @@
+Sender Bitrate  : 996.00 Kbps
+Receiver Bitrate: 996.00 Kbps (99.60%)
+Jitter          : 0.029 ms
+Packet Loss     : 0%

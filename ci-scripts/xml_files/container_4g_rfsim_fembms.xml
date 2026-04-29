@@ -1,0 +1,97 @@
+<!--
+
+ Licensed to the OpenAirInterface (OAI) Software Alliance under one or more
+ contributor license agreements.  See the NOTICE file distributed with
+ this work for additional information regarding copyright ownership.
+ The OpenAirInterface Software Alliance licenses this file to You under
+ the OAI Public License, Version 1.1  (the "License"); you may not use this file
+ except in compliance with the License.
+ You may obtain a copy of the License at
+
+      http://www.openairinterface.org/?page_id=698
+
+ Unless required by applicable law or agreed to in writing, software
+ distributed under the License is distributed on an "AS IS" BASIS,
+ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ See the License for the specific language governing permissions and
+ limitations under the License.
+
+ For more information about the OpenAirInterface (OAI) Software Alliance:
+      contact@openairinterface.org
+
+-->
+<testCaseList>
+  <htmlTabRef>rfsim-4glte-fembms</htmlTabRef>
+  <htmlTabName>Monolithic eNB - FeMBMS</htmlTabName>
+  <htmlTabIcon>wrench</htmlTabIcon>
+
+  <testCase>
+    <class>Pull_Local_Registry</class>
+    <desc>Pull Images from Local Registry</desc>
+    <node>localhost</node>
+    <images>oai-enb-asan oai-lte-ue-asan</images>
+  </testCase>
+
+  <testCase>
+    <class>Create_Workspace</class>
+    <desc>Create new Workspace</desc>
+    <node>localhost</node>
+  </testCase>
+
+  <testCase>
+    <class>Deploy_Object</class>
+    <desc>Deploy OAI 4G eNB RF sim (FeMBMS)</desc>
+    <node>localhost</node>
+    <yaml_path>ci-scripts/yaml_files/4g_rfsimulator_fembms</yaml_path>
+    <services>oai_enb0</services>
+  </testCase>
+
+  <testCase>
+    <class>IdleSleep</class>
+    <desc>Sleep</desc>
+    <idle_sleep_time_in_sec>10</idle_sleep_time_in_sec>
+  </testCase>
+
+  <testCase>
+    <class>Deploy_Object</class>
+    <desc>Deploy OAI 4G LTE-UE RF sim (FeMBMS)</desc>
+    <node>localhost</node>
+    <yaml_path>ci-scripts/yaml_files/4g_rfsimulator_fembms</yaml_path>
+    <services>oai_ue0</services>
+  </testCase>
+
+  <testCase>
+    <class>IdleSleep</class>
+    <desc>Sleep</desc>
+    <idle_sleep_time_in_sec>30</idle_sleep_time_in_sec>
+  </testCase>
+
+  <testCase>
+    <class>Iperf2_Unidir</class>
+    <desc>Iperf2 UDP DL</desc>
+    <id>rfsim4g_ue_fembms</id>
+    <node>localhost</node>
+    <svr_id>rfsim4g_enb_fembms</svr_id>
+    <svr_node>localhost</svr_node>
+    <iperf_args>-u -t 30 -b 2M</iperf_args>
+    <iperf_packetloss_threshold>25</iperf_packetloss_threshold>
+    <iperf_bitrate_threshold>80</iperf_bitrate_threshold>
+  </testCase>
+
+  <testCase>
+    <class>Undeploy_Object</class>
+    <always_exec>true</always_exec>
+    <desc>Undeploy all OAI 4G stack</desc>
+    <node>localhost</node>
+    <yaml_path>ci-scripts/yaml_files/4g_rfsimulator_fembms</yaml_path>
+  </testCase>
+
+  <testCase>
+    <class>Clean_Test_Server_Images</class>
+    <always_exec>true</always_exec>
+    <desc>Clean Test Images on Test Server</desc>
+    <node>localhost</node>
+    <images>oai-enb-asan oai-lte-ue-asan</images>
+  </testCase>
+
+</testCaseList>
