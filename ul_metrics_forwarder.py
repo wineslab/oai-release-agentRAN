@@ -37,10 +37,10 @@ from collections import deque
 import aiohttp
 
 # ============ CONFIGURATION ============
-INFLUX_URL = "https://maxime-mwc-influx-aerial.apps.tenoran.automation.otic.open6g.net"
-INFLUX_ORG = "mwc"
-INFLUX_BUCKET = "mwc-live"
-INFLUX_TOKEN = "vpclcFjYt35kfX_7Lgtd8Z8TR51n85Sy1YN9NrwRZp6LI1Gb10tcFD-2PUgamIHwvgDit0S8ldS8iEuhXvBMqg=="
+INFLUX_URL = os.environ.get("INFLUXDB_URL", "http://localhost:8086")
+INFLUX_ORG = os.environ.get("INFLUXDB_ORG", "mwc")
+INFLUX_BUCKET = os.environ.get("INFLUXDB_BUCKET", "mwc-live")
+INFLUX_TOKEN = os.environ.get("INFLUXDB_TOKEN", "agentran-dev-token")
 
 DEFAULT_PIPE_PATH = "/tmp/ul_metrics.pipe"
 DEFAULT_CIR_PIPE_PATH = "/tmp/cir.pipe"  # C-based time-domain CIR
