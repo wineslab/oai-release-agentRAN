@@ -550,7 +550,13 @@ local function allocate_new_data_ues(metrics, n_ues, rb_mask_string, min_rbs)
             local mcs = math.min(m.previous_mcs, 27)
             local alloc_rbs = math.min(max_free, 51)
 
-            -- Token bucket rate limiting (unchanged)
+            -- Token bucket rate limiting.
+            -- When budget is depleted we SKIP the UE entirely (no grant this
+            -- slot) instead of falling back to min_rbs.  This is essential in
+            -- RFsim where slots fire faster than real-time: allocating min_rbs
+            -- every slot would exceed the target rate because more slots run
+            -- per wall-clock second than on real hardware.
+            local skip_ue = false
             local limit = get_throughput_limit_bps(tonumber(m.fiveQI))
             if limit then
                 local b = ue_bucket[rnti]
@@ -584,24 +590,36 @@ local function allocate_new_data_ues(metrics, n_ues, rb_mask_string, min_rbs)
 
                 if bytes_per_rb > 0 then
                     local max_rbs = math.floor(b.budget / bytes_per_rb)
-                    alloc_rbs = math.min(alloc_rbs, math.max(min_rbs, max_rbs))
+                    if max_rbs < min_rbs then
+                        -- Budget depleted: skip this UE entirely this slot.
+                        -- The budget will recover via wall-clock refill and
+                        -- the UE will be scheduled again once sufficient
+                        -- budget accumulates.
+                        skip_ue = true
+                    else
+                        alloc_rbs = math.min(alloc_rbs, max_rbs)
+                    end
                 end
 
-                local deducted = alloc_rbs * bytes_per_rb
-                b.budget = b.budget - deducted
-                b.est_sum = b.est_sum + deducted
+                if not skip_ue then
+                    local deducted = alloc_rbs * bytes_per_rb
+                    b.budget = b.budget - deducted
+                    b.est_sum = b.est_sum + deducted
+                end
             end
 
-            m.allocated_rb = alloc_rbs
-            m.allocated_mcs = mcs
-            m.allocated_rb_start = best_start
-            current_mask = mark_rbs_used(current_mask, best_start, alloc_rbs, m.bwp_start)
+            if not skip_ue then
+                m.allocated_rb = alloc_rbs
+                m.allocated_mcs = mcs
+                m.allocated_rb_start = best_start
+                current_mask = mark_rbs_used(current_mask, best_start, alloc_rbs, m.bwp_start)
 
-            -- Boost local EWMA for scheduled UE so others get priority next
-            local se = mcs_se[mcs] or 2.0
-            local est_bytes = alloc_rbs * m.nr_of_layers * se * DATA_RE_PER_RB / 8
-            local state = ue_pf_tp[rnti]
-            state.tp = state.tp + PF_EWMA_ALPHA * est_bytes
+                -- Boost local EWMA for scheduled UE so others get priority next
+                local se = mcs_se[mcs] or 2.0
+                local est_bytes = alloc_rbs * m.nr_of_layers * se * DATA_RE_PER_RB / 8
+                local state = ue_pf_tp[rnti]
+                state.tp = state.tp + PF_EWMA_ALPHA * est_bytes
+            end
         end
     end
 
