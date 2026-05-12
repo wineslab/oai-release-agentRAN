@@ -897,9 +897,9 @@ int telnetsrv_autoinit(void) {
   add_embeddedmodules();
   add_sharedmodules();
 
-  /* Always load UL control and PRB mask modules if not already loaded */
-  static const char *autoload_modules[] = {"ul", "prbmask"};
-  for (int m = 0; m < 2; m++) {
+  /* Always load UL, DL control and PRB mask modules if not already loaded */
+  static const char *autoload_modules[] = {"ul", "dl", "prbmask"};
+  for (int m = 0; m < 3; m++) {
     char initfn[64];
     snprintf(initfn, sizeof(initfn), "add_%s_cmds", autoload_modules[m]);
     if (dlsym(RTLD_DEFAULT, initfn) == NULL) {

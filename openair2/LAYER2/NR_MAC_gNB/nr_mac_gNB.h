@@ -526,6 +526,7 @@ typedef struct NR_bler_stats {
   float bler;
   uint8_t mcs;
   uint64_t rounds[8];
+  int last_num_sched; // scheduling count at last BLER update (for activity guard)
 } NR_bler_stats_t;
 
 //
@@ -854,6 +855,50 @@ typedef struct {
   nfapi_nr_dl_tti_pdcch_pdu_rel15_t *pdcch_pdu_coreset[MAX_NUM_CORESET];
 } post_process_pusch_t;
 
+/// Per-beam scheduling context passed to the policy.
+/// One policy call per beam (per-beam loop in schedule_dl_ues).
+typedef struct nr_dl_sched_params {
+    frame_t frame;
+    slot_t slot;
+    int beam_idx;                  ///< which beam this call is for
+    int max_num_ue;                ///< max UEs to schedule on this beam
+    uint16_t slbitmap;             ///< symbol bitmap for slot's TDA
+    uint16_t *vrb_map;             ///< this beam's VRB map [275], mutable
+    int n_rb_avail;                ///< available RBs for this beam
+    int min_mcs;                   ///< minimum MCS from BLER config
+    float bler_lower;              ///< BLER lower threshold (increase MCS if below)
+    float bler_upper;              ///< BLER upper threshold (decrease MCS if above)
+} nr_dl_sched_params_t;
+
+/// Per-UE scheduling candidate — read-only inputs for the policy function.
+typedef struct nr_dl_candidate {
+    NR_UE_info_t *UE;
+    bool is_retx;                  ///< true = HARQ retransmission pending
+    int8_t retx_harq_pid;         ///< HARQ PID for retx, -1 if none
+    int retx_rbSize;               ///< RBs needed for retx, 0 for new tx
+    uint32_t pending_bytes;        ///< total bytes waiting in RLC buffers
+    float avg_throughput;          ///< EWMA goodput in bps (dl_thr_ue)
+    float bler;                    ///< current BLER estimate
+    int current_mcs;               ///< current MCS state (retx: from HARQ, new tx: from BLER tracker)
+    int max_mcs;                   ///< max allowed MCS (config + UE capability)
+    int last_num_sched;            ///< scheduled occasions in last BLER window
+    bool bler_updated;             ///< true if BLER was refreshed this frame
+    int mcs_table;                 ///< MCS table index (from BWP config)
+    int nrOfLayers;                ///< MIMO layers
+    int beam_index;                ///< UE's preferred beam direction
+    int alloc_beam_idx;            ///< allocated beam structure index, set by beam alloc
+    int bwp_start;                 ///< UE's BWP start
+    int bwp_size;                  ///< UE's BWP size
+} nr_dl_candidate_t;
+
+/// Per-UE scheduling allocation — outputs written by the policy function.
+typedef struct nr_dl_alloc {
+    bool scheduled;                ///< true = allocate this UE
+    uint16_t rbStart;              ///< allocated RB start (within BWP)
+    uint16_t rbSize;               ///< number of RBs allocated
+    uint8_t mcs;                   ///< MCS to use
+} nr_dl_alloc_t;
+
 /* forward declaration to use in nr_pp_impl_dl */
 struct gNB_MAC_INST_s;
 typedef struct gNB_MAC_INST_s gNB_MAC_INST;
@@ -938,6 +983,19 @@ typedef int (*nr_ul_beam_alloc_fn)(NR_beam_info_t *beam_info,
 typedef void (*nr_ul_sched_policy_fn)(const nr_ul_sched_params_t *params,
                                       const nr_ul_candidate_t *candidates,
                                       nr_ul_alloc_t *allocs,
+                                      int n_candidates);
+
+/// Beam allocation: assigns beam structure index to each candidate.
+typedef int (*nr_dl_beam_alloc_fn)(NR_beam_info_t *beam_info,
+                                   nr_dl_candidate_t *candidates,
+                                   int n_candidates,
+                                   frame_t frame, slot_t slot,
+                                   int slots_per_frame);
+
+/// Scheduling policy: decides PRB + MCS for each candidate on one beam.
+typedef void (*nr_dl_sched_policy_fn)(const nr_dl_sched_params_t *params,
+                                      const nr_dl_candidate_t *candidates,
+                                      nr_dl_alloc_t *allocs,
                                       int n_candidates);
 
 typedef struct f1_config_t {
@@ -1061,6 +1119,10 @@ typedef struct gNB_MAC_INST_s {
 
   nr_ul_beam_alloc_fn   ul_beam_alloc;
   nr_ul_sched_policy_fn ul_sched_policy;
+
+  /// Beam allocation + scheduling policy (called back-to-back by schedule_dl_ues)
+  nr_dl_beam_alloc_fn   dl_beam_alloc;
+  nr_dl_sched_policy_fn dl_sched_policy;
 
   nr_mac_config_t radio_config;
   nr_rlc_configuration_t rlc_config;

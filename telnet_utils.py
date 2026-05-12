@@ -113,8 +113,18 @@ class TelnetClient:
         return self._execute_command(command)
 
     def ul_scheduler_config(self, fwa_max_throughput: int, mtc_max_throughput: int):
-        """Set per-class throughput limits as Lua globals (Mbps, 0 = no limit)."""
+        """Set UL per-class throughput limits as Lua globals (Mbps, 0 = no limit)."""
         command = f"ul scheduler_config {fwa_max_throughput} {mtc_max_throughput}"
+        return self._execute_command(command)
+
+    def dl_load_scheduler(self, config_file_path: str):
+        """Load DL scheduler configuration from file (full script swap)."""
+        command = f"dl load_scheduler {config_file_path}"
+        return self._execute_command(command)
+
+    def dl_scheduler_config(self, fwa_max_throughput: int, mtc_max_throughput: int):
+        """Set DL per-class throughput limits as Lua globals (Mbps, 0 = no limit)."""
+        command = f"dl scheduler_config {fwa_max_throughput} {mtc_max_throughput}"
         return self._execute_command(command)
 
     def prbmask_block(self, start_prb: int, num_prbs: int):

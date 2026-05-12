@@ -825,6 +825,31 @@ int get_mcs_from_bler(const NR_bler_options_t *bler_options,
   return new_mcs;
 }
 
+bool update_dl_bler_stats(const NR_bler_options_t *bler_options,
+                          const NR_mac_dir_stats_t *stats,
+                          NR_bler_stats_t *bler_stats,
+                          frame_t frame)
+{
+  int diff = frame - bler_stats->last_frame;
+  if (diff < 0)
+    diff += 1024;
+
+  if (diff < BLER_UPDATE_FRAME)
+    return false;
+
+  const int num_dl_sched = (int)(stats->rounds[0] - bler_stats->rounds[0]);
+  const int num_dl_retx = (int)(stats->rounds[1] - bler_stats->rounds[1]);
+  const float bler_window = num_dl_sched > 0 ? (float)num_dl_retx / num_dl_sched : bler_stats->bler;
+  bler_stats->bler = BLER_FILTER * bler_stats->bler + (1 - BLER_FILTER) * bler_window;
+
+  bler_stats->last_frame = frame;
+  bler_stats->last_num_sched = num_dl_sched;
+  memcpy(bler_stats->rounds, stats->rounds, sizeof(stats->rounds));
+  LOG_D(MAC, "frame %4d BLER update (num_sched %d, num_retx %d, BLER wnd %.3f avg %.6f)\n",
+        frame, num_dl_sched, num_dl_retx, bler_window, bler_stats->bler);
+  return true;
+}
+
 nfapi_nr_dl_dci_pdu_t *prepare_dci_pdu(nfapi_nr_dl_tti_pdcch_pdu_rel15_t *pdcch_pdu,
                                        const NR_ServingCellConfigCommon_t *scc,
                                        const NR_SearchSpace_t *ss,

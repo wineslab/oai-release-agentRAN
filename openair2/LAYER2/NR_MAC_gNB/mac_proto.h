@@ -446,6 +446,11 @@ int get_mcs_from_bler(const NR_bler_options_t *bler_options,
                       int max_mcs,
                       frame_t frame);
 
+bool update_dl_bler_stats(const NR_bler_options_t *bler_options,
+                          const NR_mac_dir_stats_t *stats,
+                          NR_bler_stats_t *bler_stats,
+                          frame_t frame);
+
 int ul_buffer_index(int frame, int slot, int slots_per_frame, int size);
 void UL_tti_req_ahead_initialization(gNB_MAC_INST *gNB, int n, int CCid, frame_t frameP, int slotP);
 uint64_t get_ssb_bitmap(const NR_ServingCellConfigCommon_t *scc);
@@ -536,6 +541,35 @@ void set_lua_ul_scheduler_config(int fwa_max_throughput, int mtc_max_throughput)
 void nr_ul_lua_policy(const nr_ul_sched_params_t *params,
                       const nr_ul_candidate_t *candidates,
                       nr_ul_alloc_t *allocs,
+                      int n_candidates);
+
+/* DL scheduling policy functions */
+int collect_dl_candidates(gNB_MAC_INST *mac,
+                          NR_UE_info_t **UE_list,
+                          nr_dl_candidate_t *candidates,
+                          int max_candidates,
+                          frame_t frame,
+                          slot_t slot);
+
+int nr_dl_beam_alloc_default(NR_beam_info_t *beam_info,
+                             nr_dl_candidate_t *candidates,
+                             int n_candidates,
+                             frame_t frame, slot_t slot,
+                             int slots_per_frame);
+
+void nr_dl_proportional_fair(const nr_dl_sched_params_t *params,
+                             const nr_dl_candidate_t *candidates,
+                             nr_dl_alloc_t *allocs,
+                             int n_candidates);
+
+/* Lua DL scheduler */
+void init_lua_dl_scheduler(void);
+void reload_lua_dl_scheduler(const char *script_path);
+void set_lua_dl_scheduler_config(int fwa_max_throughput, int mtc_max_throughput);
+
+void nr_dl_lua_policy(const nr_dl_sched_params_t *params,
+                      const nr_dl_candidate_t *candidates,
+                      nr_dl_alloc_t *allocs,
                       int n_candidates);
 
 /* PRB blocking mask functions */

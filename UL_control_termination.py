@@ -120,7 +120,7 @@ class GnbControlAPI:
         try:
             await self._ensure_initialized()
 
-            self.telnet_client.ul_scheduler_config(fwa_value, mtc_value)
+            self.telnet_client.dl_scheduler_config(fwa_value, mtc_value)
             logger.info(f"Updated scheduler config: FWA={fwa_value} Mbps, MTC={mtc_value} Mbps")
 
             return {

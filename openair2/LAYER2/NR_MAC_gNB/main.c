@@ -330,6 +330,14 @@ void mac_top_init_gNB(ngran_node_t node_type,
       init_lua_ul_scheduler();
       RC.nrmac[i]->ul_sched_policy = nr_ul_lua_policy;
 
+      RC.nrmac[i]->dl_beam_alloc = nr_dl_beam_alloc_default;
+      RC.nrmac[i]->dl_sched_policy = nr_dl_proportional_fair;
+      const char *lua_dl_path = getenv("LUA_SCHED");
+      if (lua_dl_path && lua_dl_path[0] != '\0') {
+        init_lua_dl_scheduler();
+        RC.nrmac[i]->dl_sched_policy = nr_dl_lua_policy;
+      }
+
       if (get_softmodem_params()->phy_test) {
         RC.nrmac[i]->pre_processor_dl = nr_preprocessor_phytest;
         RC.nrmac[i]->pre_processor_ul = nr_ul_preprocessor_phytest;

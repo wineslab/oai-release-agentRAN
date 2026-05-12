@@ -90,9 +90,14 @@ add_library(telnetsrv_ul MODULE telnetsrv_ul.c)
 target_link_libraries(telnetsrv_ul PRIVATE asn1_nr_rrc_hdrs asn1_lte_rrc_hdrs UTIL)
 add_dependencies(telnetsrv telnetsrv_ul)
 
+message(STATUS "Add DL control telnet functions in libtelnetsrv_dl.so")
+add_library(telnetsrv_dl MODULE telnetsrv_dl.c)
+target_link_libraries(telnetsrv_dl PRIVATE asn1_nr_rrc_hdrs asn1_lte_rrc_hdrs UTIL)
+add_dependencies(telnetsrv telnetsrv_dl)
+
 # all libraries should be written to root build dir
 set_target_properties(telnetsrv telnetsrv_enb telnetsrv_5Gue telnetsrv_ci telnetsrv_ciUE
                       telnetsrv_bearer telnetsrv_rrc telnetsrv_o1 telnetsrv_prbmask
-                      telnetsrv_ul
+                      telnetsrv_ul telnetsrv_dl
                       PROPERTIES LIBRARY_OUTPUT_DIRECTORY ../../..
 )
